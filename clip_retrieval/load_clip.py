@@ -5,7 +5,7 @@ import torch
 import clip
 from PIL import Image
 import time
-
+from transformers import CLIPModel
 
 class OpenClipWrapper(nn.Module):
     """
@@ -76,6 +76,7 @@ def load_clip_without_warmup(clip_model, use_jit, device, clip_cache_path):
         model, preprocess = clip.load(clip_model, device=device, jit=use_jit, download_root=clip_cache_path)
     return model, preprocess
 
+FINETUNED_CLIP_PATH = 'patrickjohncyh/fashion-clip'
 
 @lru_cache(maxsize=None)
 def load_clip(clip_model="ViT-B/32", use_jit=True, warmup_batch_size=1, clip_cache_path=None, device=None):
@@ -83,6 +84,11 @@ def load_clip(clip_model="ViT-B/32", use_jit=True, warmup_batch_size=1, clip_cac
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     model, preprocess = load_clip_without_warmup(clip_model, use_jit, device, clip_cache_path)
+
+    if FINETUNED_CLIP_PATH:
+        print(f"Loading finetuned model: {FINETUNED_CLIP_PATH}")
+        finetuned_model = CLIPModel.from_pretrained(FINETUNED_CLIP_PATH)
+        model.load_state_dict(finetuned_model.state_dict(), strict=False)
 
     start = time.time()
     print(f"warming up with batch size {warmup_batch_size} on {device}", flush=True)
@@ -94,7 +100,7 @@ def load_clip(clip_model="ViT-B/32", use_jit=True, warmup_batch_size=1, clip_cac
 
 def warmup(batch_size, device, preprocess, model):
     fake_img = Image.new("RGB", (224, 224), color="red")
-    fake_text = ["fake"] * batch_size
+    fake_text = ['fake'] * batch_size
     image_tensor = torch.cat([torch.unsqueeze(preprocess(fake_img), 0)] * batch_size).to(device)
     text_tokens = clip.tokenize(fake_text).to(device)
     for _ in range(2):
